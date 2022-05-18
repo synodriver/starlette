@@ -273,8 +273,7 @@ def test_request_state(test_client_factory):
 def test_request_cookies(test_client_factory):
     async def app(scope, receive, send):
         request = Request(scope, receive)
-        mycookie = request.cookies.get("mycookie")
-        if mycookie:
+        if mycookie := request.cookies.get("mycookie"):
             response = Response(mycookie, media_type="text/plain")
         else:
             response = Response("Hello, world!", media_type="text/plain")

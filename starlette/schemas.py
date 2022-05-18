@@ -64,12 +64,12 @@ class BaseSchemaGenerator:
                 continue
 
             elif inspect.isfunction(route.endpoint) or inspect.ismethod(route.endpoint):
-                for method in route.methods or ["GET"]:
-                    if method == "HEAD":
-                        continue
-                    endpoints_info.append(
-                        EndpointInfo(route.path, method.lower(), route.endpoint)
-                    )
+                endpoints_info.extend(
+                    EndpointInfo(route.path, method.lower(), route.endpoint)
+                    for method in route.methods or ["GET"]
+                    if method != "HEAD"
+                )
+
             else:
                 for method in ["get", "post", "put", "patch", "delete", "options"]:
                     if not hasattr(route.endpoint, method):

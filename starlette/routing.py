@@ -146,7 +146,7 @@ def compile_path(
         ending = "s" if len(duplicated_params) > 1 else ""
         raise ValueError(f"Duplicated param name{ending} {names} at path {path}")
 
-    path_regex += re.escape(path[idx:]) + "$"
+    path_regex += f"{re.escape(path[idx:])}$"
     path_format += path[idx:]
 
     return re.compile(path_regex), path_format, param_convertors
@@ -221,13 +221,12 @@ class Route(BaseRoute):
 
     def matches(self, scope: Scope) -> typing.Tuple[Match, Scope]:
         if scope["type"] == "http":
-            match = self.path_regex.match(scope["path"])
-            if match:
+            if match := self.path_regex.match(scope["path"]):
                 matched_params = match.groupdict()
                 for key, value in matched_params.items():
                     matched_params[key] = self.param_convertors[key].convert(value)
                 path_params = dict(scope.get("path_params", {}))
-                path_params.update(matched_params)
+                path_params |= matched_params
                 child_scope = {"endpoint": self.endpoint, "path_params": path_params}
                 if self.methods and scope["method"] not in self.methods:
                     return Match.PARTIAL, child_scope
@@ -287,13 +286,12 @@ class WebSocketRoute(BaseRoute):
 
     def matches(self, scope: Scope) -> typing.Tuple[Match, Scope]:
         if scope["type"] == "websocket":
-            match = self.path_regex.match(scope["path"])
-            if match:
+            if match := self.path_regex.match(scope["path"]):
                 matched_params = match.groupdict()
                 for key, value in matched_params.items():
                     matched_params[key] = self.param_convertors[key].convert(value)
                 path_params = dict(scope.get("path_params", {}))
-                path_params.update(matched_params)
+                path_params |= matched_params
                 child_scope = {"endpoint": self.endpoint, "path_params": path_params}
                 return Match.FULL, child_scope
         return Match.NONE, {}
@@ -330,15 +328,12 @@ class Mount(BaseRoute):
         routes: typing.Sequence[BaseRoute] = None,
         name: str = None,
     ) -> None:
-        assert path == "" or path.startswith("/"), "Routed paths must start with '/'"
+        assert not path or path.startswith("/"), "Routed paths must start with '/'"
         assert (
             app is not None or routes is not None
         ), "Either 'app=...', or 'routes=' must be specified"
         self.path = path.rstrip("/")
-        if app is not None:
-            self.app: ASGIApp = app
-        else:
-            self.app = Router(routes=routes)
+        self.app = app if app is not None else Router(routes=routes)
         self.name = name
         self.path_regex, self.path_format, self.param_convertors = compile_path(
             self.path + "/{path:path}"
@@ -351,15 +346,14 @@ class Mount(BaseRoute):
     def matches(self, scope: Scope) -> typing.Tuple[Match, Scope]:
         if scope["type"] in ("http", "websocket"):
             path = scope["path"]
-            match = self.path_regex.match(path)
-            if match:
+            if match := self.path_regex.match(path):
                 matched_params = match.groupdict()
                 for key, value in matched_params.items():
                     matched_params[key] = self.param_convertors[key].convert(value)
                 remaining_path = "/" + matched_params.pop("path")
                 matched_path = path[: -len(remaining_path)]
                 path_params = dict(scope.get("path_params", {}))
-                path_params.update(matched_params)
+                path_params |= matched_params
                 root_path = scope.get("root_path", "")
                 child_scope = {
                     "path_params": path_params,
@@ -380,13 +374,8 @@ class Mount(BaseRoute):
             )
             if not remaining_params:
                 return URLPath(path=path)
-        elif self.name is None or name.startswith(self.name + ":"):
-            if self.name is None:
-                # No mount name.
-                remaining_name = name
-            else:
-                # 'name' matches "<mount_name>:<child_name>".
-                remaining_name = name[len(self.name) + 1 :]
+        elif self.name is None or name.startswith(f"{self.name}:"):
+            remaining_name = name if self.name is None else name[len(self.name) + 1 :]
             path_kwarg = path_params.get("path")
             path_params["path"] = ""
             path_prefix, remaining_params = replace_params(
@@ -395,13 +384,11 @@ class Mount(BaseRoute):
             if path_kwarg is not None:
                 remaining_params["path"] = path_kwarg
             for route in self.routes or []:
-                try:
+                with contextlib.suppress(NoMatchFound):
                     url = route.url_path_for(remaining_name, **remaining_params)
                     return URLPath(
                         path=path_prefix.rstrip("/") + str(url), protocol=url.protocol
                     )
-                except NoMatchFound:
-                    pass
         raise NoMatchFound()
 
     async def handle(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -430,13 +417,12 @@ class Host(BaseRoute):
         if scope["type"] in ("http", "websocket"):
             headers = Headers(scope=scope)
             host = headers.get("host", "").split(":")[0]
-            match = self.host_regex.match(host)
-            if match:
+            if match := self.host_regex.match(host):
                 matched_params = match.groupdict()
                 for key, value in matched_params.items():
                     matched_params[key] = self.param_convertors[key].convert(value)
                 path_params = dict(scope.get("path_params", {}))
-                path_params.update(matched_params)
+                path_params |= matched_params
                 child_scope = {"path_params": path_params, "endpoint": self.app}
                 return Match.FULL, child_scope
         return Match.NONE, {}
@@ -450,22 +436,15 @@ class Host(BaseRoute):
             )
             if not remaining_params:
                 return URLPath(path=path, host=host)
-        elif self.name is None or name.startswith(self.name + ":"):
-            if self.name is None:
-                # No mount name.
-                remaining_name = name
-            else:
-                # 'name' matches "<mount_name>:<child_name>".
-                remaining_name = name[len(self.name) + 1 :]
+        elif self.name is None or name.startswith(f"{self.name}:"):
+            remaining_name = name if self.name is None else name[len(self.name) + 1 :]
             host, remaining_params = replace_params(
                 self.host_format, self.param_convertors, path_params
             )
             for route in self.routes or []:
-                try:
+                with contextlib.suppress(NoMatchFound):
                     url = route.url_path_for(remaining_name, **remaining_params)
                     return URLPath(path=str(url), protocol=url.protocol, host=host)
-                except NoMatchFound:
-                    pass
         raise NoMatchFound()
 
     async def handle(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -583,10 +562,8 @@ class Router:
 
     def url_path_for(self, name: str, **path_params: str) -> URLPath:
         for route in self.routes:
-            try:
+            with contextlib.suppress(NoMatchFound):
                 return route.url_path_for(name, **path_params)
-            except NoMatchFound:
-                pass
         raise NoMatchFound()
 
     async def startup(self) -> None:
@@ -747,7 +724,7 @@ class Router:
         return decorator
 
     def add_event_handler(self, event_type: str, func: typing.Callable) -> None:
-        assert event_type in ("startup", "shutdown")
+        assert event_type in {"startup", "shutdown"}
 
         if event_type == "startup":
             self.on_startup.append(func)

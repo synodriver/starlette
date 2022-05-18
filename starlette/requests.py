@@ -38,12 +38,7 @@ def cookie_parser(cookie_string: str) -> typing.Dict[str, str]:
     """
     cookie_dict: typing.Dict[str, str] = {}
     for chunk in cookie_string.split(";"):
-        if "=" in chunk:
-            key, val = chunk.split("=", 1)
-        else:
-            # Assume an empty name per
-            # https://bugzilla.mozilla.org/show_bug.cgi?id=169091
-            key, val = "", chunk
+        key, val = chunk.split("=", 1) if "=" in chunk else ("", chunk)
         key, val = key.strip(), val.strip()
         if key or val:
             # unquote using Python's algorithm.
@@ -122,9 +117,7 @@ class HTTPConnection(Mapping):
     def cookies(self) -> typing.Dict[str, str]:
         if not hasattr(self, "_cookies"):
             cookies: typing.Dict[str, str] = {}
-            cookie_header = self.headers.get("cookie")
-
-            if cookie_header:
+            if cookie_header := self.headers.get("cookie"):
                 cookies = cookie_parser(cookie_header)
             self._cookies = cookies
         return self._cookies
@@ -211,8 +204,7 @@ class Request(HTTPConnection):
         while True:
             message = await self._receive()
             if message["type"] == "http.request":
-                body = message.get("body", b"")
-                if body:
+                if body := message.get("body", b""):
                     yield body
                 if not message.get("more_body", False):
                     break
@@ -274,10 +266,11 @@ class Request(HTTPConnection):
         if "http.response.push" in self.scope.get("extensions", {}):
             raw_headers = []
             for name in SERVER_PUSH_HEADERS_TO_COPY:
-                for value in self.headers.getlist(name):
-                    raw_headers.append(
-                        (name.encode("latin-1"), value.encode("latin-1"))
-                    )
+                raw_headers.extend(
+                    (name.encode("latin-1"), value.encode("latin-1"))
+                    for value in self.headers.getlist(name)
+                )
+
             await self._send(
                 {"type": "http.response.push", "path": path, "headers": raw_headers}
             )
