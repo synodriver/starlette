@@ -148,7 +148,7 @@ def test_headers():
 
 def test_mutable_headers():
     h = MutableHeaders()
-    assert dict(h) == {}
+    assert not dict(h)
     h["a"] = "1"
     assert dict(h) == {"a": "1"}
     h["a"] = "2"

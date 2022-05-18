@@ -48,12 +48,11 @@ class CORSMiddleware:
             preflight_headers["Vary"] = "Origin"
         else:
             preflight_headers["Access-Control-Allow-Origin"] = "*"
-        preflight_headers.update(
-            {
-                "Access-Control-Allow-Methods": ", ".join(allow_methods),
-                "Access-Control-Max-Age": str(max_age),
-            }
-        )
+        preflight_headers |= {
+            "Access-Control-Allow-Methods": ", ".join(allow_methods),
+            "Access-Control-Max-Age": str(max_age),
+        }
+
         allow_headers = sorted(SAFELISTED_HEADERS | set(allow_headers))
         if allow_headers and not allow_all_headers:
             preflight_headers["Access-Control-Allow-Headers"] = ", ".join(allow_headers)

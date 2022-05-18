@@ -25,8 +25,7 @@ class HTTPEndpoint:
         request = Request(self.scope, receive=self.receive)
         handler_name = "get" if request.method == "HEAD" else request.method.lower()
         handler = getattr(self, handler_name, self.method_not_allowed)
-        is_async = asyncio.iscoroutinefunction(handler)
-        if is_async:
+        if is_async := asyncio.iscoroutinefunction(handler):
             response = await handler(request)
         else:
             response = await run_in_threadpool(handler, request)

@@ -78,7 +78,7 @@ class Response:
         content_type = self.media_type
         if content_type is not None and populate_content_type:
             if content_type.startswith("text/"):
-                content_type += "; charset=" + self.charset
+                content_type += f"; charset={self.charset}"
             raw_headers.append((b"content-type", content_type.encode("latin-1")))
 
         self.raw_headers = raw_headers
@@ -116,11 +116,12 @@ class Response:
         if httponly:
             cookie[key]["httponly"] = True
         if samesite is not None:
-            assert samesite.lower() in [
+            assert samesite.lower() in {
                 "strict",
                 "lax",
                 "none",
-            ], "samesite must be either 'strict', 'lax' or 'none'"
+            }, "samesite must be either 'strict', 'lax' or 'none'"
+
             cookie[key]["samesite"] = samesite
         cookie_val = cookie.output(header="").strip()
         self.raw_headers.append((b"set-cookie", cookie_val.encode("latin-1")))
@@ -273,9 +274,10 @@ class FileResponse(Response):
         if self.filename is not None:
             content_disposition_filename = quote(self.filename)
             if content_disposition_filename != self.filename:
-                content_disposition = "attachment; filename*=utf-8''{}".format(
-                    content_disposition_filename
+                content_disposition = (
+                    f"attachment; filename*=utf-8''{content_disposition_filename}"
                 )
+
             else:
                 content_disposition = f'attachment; filename="{self.filename}"'
             self.headers.setdefault("content-disposition", content_disposition)
@@ -286,7 +288,7 @@ class FileResponse(Response):
     def set_stat_headers(self, stat_result: os.stat_result) -> None:
         content_length = str(stat_result.st_size)
         last_modified = formatdate(stat_result.st_mtime, usegmt=True)
-        etag_base = str(stat_result.st_mtime) + "-" + str(stat_result.st_size)
+        etag_base = f"{str(stat_result.st_mtime)}-{str(stat_result.st_size)}"
         etag = hashlib.md5(etag_base.encode()).hexdigest()
 
         self.headers.setdefault("content-length", content_length)

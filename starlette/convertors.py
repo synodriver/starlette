@@ -30,7 +30,7 @@ class PathConvertor(Convertor):
     regex = ".*"
 
     def convert(self, value: str) -> typing.Any:
-        return str(value)
+        return value
 
     def to_string(self, value: typing.Any) -> str:
         return str(value)

@@ -24,7 +24,7 @@ class SessionMiddleware:
         self.signer = itsdangerous.TimestampSigner(str(secret_key))
         self.session_cookie = session_cookie
         self.max_age = max_age
-        self.security_flags = "httponly; samesite=" + same_site
+        self.security_flags = f"httponly; samesite={same_site}"
         if https_only:  # Secure flag can be used with HTTPS only
             self.security_flags += "; secure"
 
@@ -66,11 +66,8 @@ class SessionMiddleware:
                 elif not initial_session_was_empty:
                     # The session has been cleared.
                     headers = MutableHeaders(scope=message)
-                    header_value = "{}={}; {}".format(
-                        self.session_cookie,
-                        f"null; path={path}; expires=Thu, 01 Jan 1970 00:00:00 GMT;",
-                        self.security_flags,
-                    )
+                    header_value = f"{self.session_cookie}=null; path={path}; expires=Thu, 01 Jan 1970 00:00:00 GMT;; {self.security_flags}"
+
                     headers.append("Set-Cookie", header_value)
             await send(message)
 
